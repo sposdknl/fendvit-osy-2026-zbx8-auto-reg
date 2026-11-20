@@ -51,11 +51,28 @@ V Zabbixu na `enceladus.pfsense.cz`: *Data collection → Hosts* → host `debia
 
 ## Výsledek
 
-Registrace hosta:
+Ověřeno 20. 11. 2026 (agent `zabbix_agent2 8.0.0`, server Zabbix 7.0.32 na `enceladus.pfsense.cz`). Log agenta po prvním startu:
 
-![Host debian13-fendvit v Zabbixu](Images/zabbix-host.png)
+```
+no active checks on server [enceladus.pfsense.cz:10051]: host [debian13-fendvit] not found
+active checks on server are active again
+```
 
-Přicházející data:
+Server hosta nejdřív neznal, za pár sekund ho auto-registrace vytvořila. Po druhém `vagrant provision` i po restartu (`vagrant reload`) má host stále stejný název a posílá data.
+
+Host `debian13-fendvit` je zaregistrovaný, agent je dostupný (ZBX) a má štítek `OS: Linux`:
+
+![Host debian13-fendvit v seznamu hostů](Images/zabbix-host.png)
+
+Skupina `Customer/SPOS` (IP adresa rozmazaná):
+
+![Detail hosta se skupinou Customer/SPOS](Images/zabbix-host-detail.png)
+
+Šablona pro Linux (agent 2, aktivní kontroly): 43 položek je zděděných ze šablony. Žákovský účet nemá právo šablony číst, proto u nich Zabbix píše „Inaccessible template“:
+
+![Položky zděděné ze šablony](Images/zabbix-template.png)
+
+Přicházející data (Latest data):
 
 ![Latest data hosta debian13-fendvit](Images/zabbix-data.png)
 
