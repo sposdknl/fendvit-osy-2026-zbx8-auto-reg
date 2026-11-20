@@ -18,6 +18,6 @@ diff -u "$CONF-orig" "$CONF" || true
 
 # Restart sluzby a kontrola stavu
 systemctl restart zabbix-agent2
-systemctl --no-pager status zabbix-agent2 | head -5
+systemctl is-active zabbix-agent2
 
 # EOF

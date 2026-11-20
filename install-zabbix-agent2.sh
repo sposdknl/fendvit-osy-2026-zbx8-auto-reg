@@ -13,6 +13,6 @@ apt-get install -y zabbix-agent2
 
 # Povoleni sluzby a kontrola verze
 systemctl enable zabbix-agent2
-zabbix_agent2 -V | head -1
+zabbix_agent2 -V
 
 # EOF
