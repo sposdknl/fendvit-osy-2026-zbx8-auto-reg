@@ -69,6 +69,10 @@ Data chodí:
 
 ![Latest data](Images/zabbix-data.png)
 
+Dashboard System performance za poslední hodinu. Grafy začínají kolem 8:20, kdy jsem virtuálku spustil:
+
+![System performance](Images/zabbix-system-performance.jpg)
+
 ## Odkazy
 
 - [Instalace Zabbixu z balíčků](https://www.zabbix.com/documentation/8.0/en/manual/installation/install/packages)
