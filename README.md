@@ -1,18 +1,18 @@
-# OSY: Automatická registrace Debianu 13 do Zabbixu
+# Zabbix 8.0 auto registrace na Debianu 13
 
-![Virtuální server s Debianem 13 propojený se Zabbix monitoringem](Images/debian13-zabbix-agent2-hero.webp)
+![Panda u Zabbixu](Images/zabbix-panda.jpg)
 
-Vagrant spustí virtuální stroj s **Debianem 13**, nainstaluje **Zabbix Agent 2 verze 8.0 LTS** z oficiálního repozitáře Zabbixu a nastaví ho tak, aby se sám zaregistroval na server `enceladus.pfsense.cz`. Všechno proběhne automaticky při `vagrant up`.
+Cílem bylo spustit přes Vagrant Debian 13, nainstalovat na něj Zabbix Agent 2 verze 8.0 a nechat ho, aby se sám zaregistroval na server enceladus.pfsense.cz. Všechno se má udělat samo při `vagrant up`.
 
-## Soubory
+## Co je v repozitáři
 
-| Soubor | Co dělá |
-|---|---|
-| `Vagrantfile` | Box `bento/debian-13`, 1 CPU, 1 GB RAM, SSH na `127.0.0.1:2206`, spouští oba skripty jako provisionery |
-| `install-zabbix-agent2.sh` | Přidá oficiální repozitář Zabbix 8.0 pro Debian 13, nainstaluje `zabbix-agent2`, povolí službu a vypíše verzi |
-| `configure-zabbix-agent2.sh` | Nastaví v `/etc/zabbix/zabbix_agent2.conf` `Hostname`, `Server`, `ServerActive` a `HostMetadata`, restartuje agenta |
+- `Vagrantfile` - box `bento/debian-13`, 1 CPU a 1 GB RAM, na konci spouští dva skripty
+- `install-zabbix-agent2.sh` - přidá oficiální repozitář Zabbix 8.0 pro Debian 13 (ne balíček z Debianu) a nainstaluje agenta
+- `configure-zabbix-agent2.sh` - upraví `/etc/zabbix/zabbix_agent2.conf` a restartuje agenta
 
-## Nastavení agenta
+Vycházel jsem ze skriptů, které jsem dělal 16. 10. pro Zabbix 7.0. Musel jsem změnit odkaz na repozitář (pro 8.0 je v cestě navíc `/release/`) a hlavně hostname. Dřív se generoval přes `uuidgen`, takže po každém `vagrant provision` byl jiný. Teď je pevně nastavený na `debian13-fendvit`, takže zůstane stejný i po restartu.
+
+V konfiguraci agenta se mění tyhle řádky:
 
 ```
 Hostname=debian13-fendvit
@@ -21,10 +21,7 @@ ServerActive=enceladus.pfsense.cz
 HostMetadata=SPOS
 ```
 
-- **Hostname** je pevný a jedinečný (`debian13-fendvit`), takže je stejný po restartu VM i po opakovaném provisioningu.
-- **HostMetadata=SPOS** — podle toho server pozná, že má hosta zaregistrovat, a přiřadí mu skupinu, štítek a šablonu pro Linux (agent 2).
-- Registraci spouští **aktivní** spojení agenta (`ServerActive`) na port 10051 serveru.
-- Konfigurační skript mění řádky přes `sed` vzory, které sedí na původní i už upravený řádek, takže ho lze spustit opakovaně bez duplicit.
+Podle `HostMetadata=SPOS` server pozná, že má hosta zaregistrovat a dát mu skupinu, štítek a šablonu. Sed v konfiguračním skriptu hledá celý řádek (`^Hostname=.*`), takže když se skript spustí znovu, nic se nezdvojí.
 
 ## Spuštění
 
@@ -34,50 +31,46 @@ cd fendvit-osy-2026-zbx8-auto-reg
 vagrant up
 ```
 
-Opakované spuštění skriptů: `vagrant provision`. Vypnutí: `vagrant halt`.
+Když chci skripty pustit znovu, stačí `vagrant provision`. Vypnutí je `vagrant halt`.
 
 ## Ověření
 
-Ve VM (`vagrant ssh`, pak `sudo -i`):
+Ve virtuálce jsem si zkontroloval verzi a jestli agent běží:
 
 ```console
+vagrant ssh
+sudo -i
 zabbix_agent2 -V
 systemctl status zabbix-agent2
-grep -E '^(Hostname|Server|ServerActive|HostMetadata)=' /etc/zabbix/zabbix_agent2.conf
-journalctl -u zabbix-agent2 --no-pager | tail
+tail /var/log/zabbix/zabbix_agent2.log
 ```
 
-V Zabbixu na `enceladus.pfsense.cz`: *Data collection → Hosts* → host `debian13-fendvit` (skupina, štítek, šablona) a *Monitoring → Latest data* → přicházející data.
+Verze agenta je `zabbix_agent2 (Zabbix) 8.0.0` a služba je `active`. V logu bylo nejdřív `host [debian13-fendvit] not found` a pár sekund potom `active checks on server are active again`. To znamená, že si server hosta sám vytvořil. Pak jsem pustil ještě jednou `vagrant provision` a `vagrant reload` a hostname zůstal stejný.
 
-## Výsledek
+## Problémy
 
-Ověřeno 20. 11. 2026 (agent `zabbix_agent2 8.0.0`, server Zabbix 7.0.32 na `enceladus.pfsense.cz`). Log agenta po prvním startu:
+Napoprvé spadl instalační skript na posledním řádku. Měl jsem tam `zabbix_agent2 -V | head -1` a se `set -o pipefail` to vrátí chybu, protože `head` zavře rouru dřív, než příkaz dopíše. Agent se přitom nainstaloval normálně. Rouru jsem odstranil a pak už všechno prošlo.
 
-```
-no active checks on server [enceladus.pfsense.cz:10051]: host [debian13-fendvit] not found
-active checks on server are active again
-```
+## Výsledek v Zabbixu
 
-Server hosta nejdřív neznal, za pár sekund ho auto-registrace vytvořila. Po druhém `vagrant provision` i po restartu (`vagrant reload`) má host stále stejný název a posílá data.
+Host je zaregistrovaný a má štítek OS: Linux:
 
-Host `debian13-fendvit` je zaregistrovaný, agent je dostupný (ZBX) a má štítek `OS: Linux`:
+![Host v seznamu](Images/zabbix-host.png)
 
-![Host debian13-fendvit v seznamu hostů](Images/zabbix-host.png)
+Skupina Customer/SPOS (IP adresu jsem rozmazal):
 
-Skupina `Customer/SPOS` (IP adresa rozmazaná):
+![Detail hosta](Images/zabbix-host-detail.png)
 
-![Detail hosta se skupinou Customer/SPOS](Images/zabbix-host-detail.png)
+Šablona: můj účet nemá právo šablony vidět, takže pole Templates je prázdné. Že je šablona přiřazená, je vidět na položkách, které jsou z ní zděděné (Inaccessible template):
 
-Šablona pro Linux (agent 2, aktivní kontroly): 43 položek je zděděných ze šablony. Žákovský účet nemá právo šablony číst, proto u nich Zabbix píše „Inaccessible template“:
+![Položky ze šablony](Images/zabbix-template.png)
 
-![Položky zděděné ze šablony](Images/zabbix-template.png)
+Data chodí:
 
-Přicházející data (Latest data):
+![Latest data](Images/zabbix-data.png)
 
-![Latest data hosta debian13-fendvit](Images/zabbix-data.png)
+## Odkazy
 
-## Dokumentace
-
-- [Zabbix 8.0: instalace z oficiálních balíčků](https://www.zabbix.com/documentation/8.0/en/manual/installation/install/packages)
-- [Zabbix 8.0: automatická registrace aktivního agenta](https://www.zabbix.com/documentation/8.0/en/manual/discovery/auto_registration)
-- [Zabbix 8.0: parametry konfigurace agenta 2](https://www.zabbix.com/documentation/8.0/en/manual/concepts/agent2/agent2_params)
+- [Instalace Zabbixu z balíčků](https://www.zabbix.com/documentation/8.0/en/manual/installation/install/packages)
+- [Auto registrace aktivního agenta](https://www.zabbix.com/documentation/8.0/en/manual/discovery/auto_registration)
+- [Parametry agenta 2](https://www.zabbix.com/documentation/8.0/en/manual/concepts/agent2/agent2_params)
